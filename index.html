@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuralChat — AI Training Interface</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #060604;
+            --panel:     #0e0b06;
+            --input-bg:  #130f04;
+            --border:    rgba(245, 158, 11, 0.2);
+            --amber:     #f59e0b;
+            --amber-lt:  #fcd34d;
+            --green:     #10b981;
+            --red:       #ef4444;
+            --text:      #f0d590;
+            --dim:       #7a6a3a;
+        }
+
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background: repeating-linear-gradient(
+                0deg, transparent, transparent 2px,
+                rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px
+            );
+            pointer-events: none; z-index: 9998;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Share Tech Mono', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--panel);
+            display: flex; align-items: center; justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.1rem; font-weight: 900;
+            color: var(--amber);
+            text-shadow: 0 0 24px rgba(245,158,11,0.45);
+            letter-spacing: 0.08em;
+        }
+        .logo span { color: var(--green); }
+
+        .hdr-right {
+            display: flex; align-items: center; gap: 18px;
+            font-size: 0.68rem; color: var(--dim);
+        }
+
+        .live-dot {
+            display: inline-block; width: 7px; height: 7px;
+            border-radius: 50%; background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+            animation: pulse 2s infinite; margin-right: 5px;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+        .user-chip {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(245,158,11,0.06);
+            border: 1px solid var(--border);
+            padding: 3px 10px 3px 4px;
+            border-radius: 2px;
+        }
+        .user-avatar {
+            width: 22px; height: 22px; border-radius: 50%;
+            border: 1px solid var(--amber);
+            object-fit: cover;
+        }
+        .user-name { font-size: 0.62rem; color: var(--amber-lt); letter-spacing: 0.06em; }
+        .sign-out-btn {
+            background: none; border: none;
+            color: var(--dim); font-family: inherit;
+            font-size: 0.58rem; cursor: pointer;
+            padding: 0 0 0 6px; border-left: 1px solid var(--border);
+            margin-left: 4px; line-height: 1;
+        }
+        .sign-out-btn:hover { color: var(--red); }
+
+        .main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            overflow: hidden;
+        }
+
+        .chat-panel {
+            display: flex; flex-direction: column;
+            border-right: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .messages {
+            flex: 1; overflow-y: auto;
+            padding: 18px 20px;
+            display: flex; flex-direction: column; gap: 14px;
+            scroll-behavior: smooth;
+        }
+        .messages::-webkit-scrollbar { width: 3px; }
+        .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        .msg-wrap {
+            display: flex; flex-direction: column;
+            max-width: 82%;
+            animation: fadeUp .25s ease;
+        }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+        .msg-wrap.user { align-self: flex-end; align-items: flex-end; }
+        .msg-wrap.ai   { align-self: flex-start; align-items: flex-start; }
+
+        .msg-label { font-size: 0.62rem; color: var(--dim); margin-bottom: 3px; letter-spacing: 0.1em; }
+
+        .msg-bubble { padding: 9px 13px; font-size: 0.84rem; line-height: 1.55; border-radius: 2px; }
+        .msg-wrap.user .msg-bubble {
+            background: rgba(245,158,11,0.12);
+            border: 1px solid rgba(245,158,11,0.35);
+            color: var(--amber-lt);
+        }
+        .msg-wrap.ai .msg-bubble {
+            background: rgba(16,185,129,0.07);
+            border: 1px solid rgba(16,185,129,0.28);
+            color: #a7f3d0;
+        }
+        .msg-wrap.ai.low .msg-bubble {
+            background: rgba(239,68,68,0.07);
+            border: 1px solid rgba(239,68,68,0.28);
+            color: #fca5a5;
+        }
+
+        .conf-row { margin-top: 5px; display: flex; align-items: center; gap: 7px; font-size: 0.6rem; color: var(--dim); }
+        .conf-track { width: 70px; height: 3px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+        .conf-fill { height: 100%; border-radius: 2px; transition: width .5s ease; }
+
+        .fb-row { display: flex; gap: 5px; margin-top: 5px; }
+        .fb-btn {
+            background: none; border: 1px solid var(--border); color: var(--dim);
+            font-family: inherit; font-size: 0.62rem; padding: 2px 9px;
+            cursor: pointer; border-radius: 2px; transition: all .18s;
+        }
+        .fb-btn:hover  { border-color: var(--amber); color: var(--amber); }
+        .fb-btn.saved  { border-color: var(--green); color: var(--green); pointer-events:none; }
+        .fb-btn.fixing { border-color: var(--amber); color: var(--amber); pointer-events:none; }
+
+        .typing {
+            display: flex; align-items: center; gap: 4px;
+            padding: 8px 12px;
+            background: rgba(16,185,129,0.05);
+            border: 1px solid rgba(16,185,129,0.18);
+            border-radius: 2px; align-self: flex-start;
+        }
+        .t-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--green); animation: blink 1.1s infinite; }
+        .t-dot:nth-child(2){animation-delay:.18s} .t-dot:nth-child(3){animation-delay:.36s}
+        @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+
+        .input-area {
+            padding: 13px 18px;
+            border-top: 1px solid var(--border);
+            background: var(--panel);
+            display: flex; align-items: center; gap: 10px;
+        }
+
+        .al-toggle {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.6rem; color: var(--dim);
+            cursor: pointer; user-select: none; white-space: nowrap;
+        }
+        .switch {
+            width: 28px; height: 14px; background: rgba(255,255,255,0.08);
+            border-radius: 7px; position: relative; transition: background .2s;
+        }
+        .switch.on { background: var(--green); }
+        .knob {
+            position: absolute; width: 10px; height: 10px; border-radius: 50%;
+            background: #fff; top: 2px; left: 2px; transition: left .2s;
+        }
+        .switch.on .knob { left: 16px; }
+
+        #chat-input {
+            flex: 1; background: var(--input-bg); border: 1px solid var(--border);
+            color: var(--text); font-family: 'Share Tech Mono', monospace;
+            font-size: 0.84rem; padding: 9px 13px; border-radius: 2px;
+            outline: none; transition: border-color .18s;
+        }
+        #chat-input:focus { border-color: var(--amber); }
+        #chat-input::placeholder { color: var(--dim); }
+
+        .send-btn {
+            background: var(--amber); color: #000; border: none;
+            font-family: 'Orbitron', monospace; font-size: 0.6rem; font-weight: 700;
+            padding: 9px 15px; border-radius: 2px; cursor: pointer;
+            letter-spacing: 0.05em; transition: background .18s, box-shadow .18s;
+        }
+        .send-btn:hover { background: var(--amber-lt); box-shadow: 0 0 14px rgba(245,158,11,.4); }
+        .send-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+        .train-panel { overflow-y: auto; background: var(--panel); display: flex; flex-direction: column; }
+        .train-panel::-webkit-scrollbar { width: 3px; }
+        .train-panel::-webkit-scrollbar-thumb { background: var(--border); }
+
+        .section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+
+        .sec-title {
+            font-family: 'Orbitron', monospace; font-size: 0.58rem; color: var(--amber);
+            letter-spacing: 0.15em; margin-bottom: 12px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .sec-title::after { content:''; flex:1; height:1px; background: var(--border); }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stat { background: rgba(245,158,11,0.04); border: 1px solid var(--border); padding: 9px 11px; border-radius: 2px; }
+        .stat-n { font-family: 'Orbitron', monospace; font-size: 1.35rem; color: var(--amber); line-height: 1; }
+        .stat-l { font-size: 0.58rem; color: var(--dim); margin-top: 3px; }
+
+        .field { margin-bottom: 9px; }
+        .f-label { display: block; font-size: 0.62rem; color: var(--dim); margin-bottom: 3px; letter-spacing: 0.07em; }
+        .f-input {
+            width: 100%; background: var(--input-bg); border: 1px solid var(--border);
+            color: var(--text); font-family: 'Share Tech Mono', monospace;
+            font-size: 0.78rem; padding: 7px 10px; border-radius: 2px;
+            outline: none; transition: border-color .18s; resize: vertical;
+        }
+        .f-input:focus { border-color: var(--amber); }
+        .f-input::placeholder { color: var(--dim); }
+        textarea.f-input { min-height: 68px; }
+
+        .act-btn {
+            width: 100%; background: none; border: 1px solid var(--amber); color: var(--amber);
+            font-family: 'Orbitron', monospace; font-size: 0.58rem; font-weight: 700;
+            padding: 8px; border-radius: 2px; cursor: pointer;
+            letter-spacing: 0.1em; transition: all .18s; margin-top: 2px;
+        }
+        .act-btn:hover { background: var(--amber); color: #000; box-shadow: 0 0 14px rgba(245,158,11,.3); }
+        .act-btn.g { border-color: var(--green); color: var(--green); }
+        .act-btn.g:hover { background: var(--green); color: #000; box-shadow: 0 0 14px rgba(16,185,129,.3); }
+        .act-btn:disabled { opacity: .4; pointer-events: none; }
+
+        .notice { font-size: 0.7rem; padding: 6px 9px; border-radius: 2px; margin-top: 8px; display: none; }
+        .notice.ok { display:block; background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.3); color:#a7f3d0; }
+        .notice.er { display:block; background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.3); color:#fca5a5; }
+
+        .hint { font-size: 0.63rem; color: var(--dim); margin-bottom: 8px; line-height: 1.5; }
+
+        .retrain-bar {
+            padding: 10px 16px; background: rgba(16,185,129,0.05);
+            border-bottom: 1px solid var(--border);
+            display: none; align-items: center; justify-content: space-between;
+            font-size: 0.65rem; color: var(--green);
+        }
+        .retrain-bar.show { display: flex; }
+        .retrain-bar button {
+            background: var(--green); color: #000; border: none;
+            font-family: 'Orbitron', monospace; font-size: 0.55rem; font-weight: 700;
+            padding: 5px 11px; border-radius: 2px; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">NEURAL<span>CHAT</span></div>
+    <div class="hdr-right">
+        <span><span class="live-dot"></span>MODEL ACTIVE</span>
+        <span id="hdr-examples">— EXAMPLES</span>
+        <div class="user-chip" id="user-chip" style="display:none">
+            <img class="user-avatar" id="user-avatar" src="" alt="" />
+            <span class="user-name" id="user-display-name"></span>
+            <button class="sign-out-btn" id="sign-out-btn" title="Sign out">✕</button>
+        </div>
+    </div>
+</header>
+
+<div class="main">
+
+    <div class="chat-panel">
+
+        <div class="retrain-bar" id="retrain-bar">
+            <span>⚡ Auto-learned exchanges pending — retrain to apply</span>
+            <button id="retrain-btn">RETRAIN NOW</button>
+        </div>
+
+        <div class="messages" id="messages">
+            <div class="msg-wrap ai">
+                <div class="msg-label">// NEURAL-AI</div>
+                <div class="msg-bubble" id="welcome-bubble">System initialized. Chat with me, rate my answers, or use the training panel →</div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <div class="al-toggle" id="al-toggle" title="Auto-save good responses as training data">
+                <div class="switch" id="al-switch"><div class="knob"></div></div>
+                AUTO-LEARN
+            </div>
+            <input type="text" id="chat-input" placeholder="Type a message…" autocomplete="off" />
+            <button class="send-btn" id="send-btn">SEND</button>
+        </div>
+    </div>
+
+    <div class="train-panel">
+
+        <div class="section">
+            <div class="sec-title">NEURAL STATS</div>
+            <div class="stats-grid">
+                <div class="stat"><div class="stat-n" id="s-examples">—</div><div class="stat-l">TRAINING EXAMPLES</div></div>
+                <div class="stat"><div class="stat-n" id="s-sent">0</div><div class="stat-l">MESSAGES SENT</div></div>
+                <div class="stat"><div class="stat-n" id="s-taught">0</div><div class="stat-l">MANUALLY TAUGHT</div></div>
+                <div class="stat"><div class="stat-n" id="s-learned">0</div><div class="stat-l">AUTO-LEARNED</div></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="sec-title">TEACH MANUALLY</div>
+            <div class="field">
+                <label class="f-label">USER INPUT</label>
+                <input class="f-input" id="t-prompt" type="text" placeholder="What should I understand?" />
+            </div>
+            <div class="field">
+                <label class="f-label">AI RESPONSE</label>
+                <textarea class="f-input" id="t-response" placeholder="How should I respond?"></textarea>
+            </div>
+            <button class="act-btn" id="teach-btn">⚡ TRAIN NEURAL NETWORK</button>
+            <div class="notice" id="teach-notice"></div>
+        </div>
+
+        <div class="section">
+            <div class="sec-title">IMPORT JSON LOG</div>
+            <p class="hint">Paste a JSON array in either format:<br>
+            • <code>[{"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"}]}]</code><br>
+            • <code>[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"}]</code>
+            </p>
+            <div class="field">
+                <label class="f-label">JSON CHAT LOG</label>
+                <textarea class="f-input" id="json-log" placeholder="Paste JSON here…" style="min-height:100px;"></textarea>
+            </div>
+            <button class="act-btn g" id="json-import-btn">📂 IMPORT & RETRAIN</button>
+            <div class="notice" id="json-notice"></div>
+        </div>
+
+        <div class="section">
+            <div class="sec-title">IMPORT PLAIN TEXT</div>
+            <p class="hint">Paste alternating lines prefixed with <code>User:</code> / <code>AI:</code> (or <code>Assistant:</code>). Each pair becomes a training example.</p>
+            <div class="field">
+                <label class="f-label">PLAIN CONVERSATION</label>
+                <textarea class="f-input" id="plain-log"
+                    placeholder="User: hello&#10;AI: hey there!&#10;User: how are you?&#10;AI: I am great, thanks!"
+                    style="min-height:100px;"></textarea>
+            </div>
+            <button class="act-btn g" id="plain-import-btn">📝 PARSE & RETRAIN</button>
+            <div class="notice" id="plain-notice"></div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// ── Auth guard ─────────────────────────────────────────────────────
+const storedUser = localStorage.getItem('nc_user');
+if (!storedUser) { window.location.href = 'login.html'; }
+const currentUser = storedUser ? JSON.parse(storedUser) : null;
+
+// ── Personalize ────────────────────────────────────────────────────
+if (currentUser) {
+    const chip = document.getElementById('user-chip');
+    chip.style.display = 'flex';
+    document.getElementById('user-display-name').textContent = currentUser.given.toUpperCase();
+    const av = document.getElementById('user-avatar');
+    if (currentUser.picture) { av.src = currentUser.picture; } else { av.style.display = 'none'; }
+    document.getElementById('welcome-bubble').textContent =
+        `Hey, ${currentUser.given}! System initialized. Chat with me, rate my answers, or use the training panel →`;
+}
+
+document.getElementById('sign-out-btn').addEventListener('click', () => {
+    localStorage.removeItem('nc_user');
+    window.location.href = 'login.html';
+});
+
+// ── Config ─────────────────────────────────────────────────────────
+// !! Change this to your Flask server URL when deployed !!
+const BACKEND = 'http://localhost:5000';
+
+// ── State ──────────────────────────────────────────────────────────
+let autoLearn = false, msgCount = 0, taughtCount = 0, learnCount = 0, pendingLearn = 0;
+
+const msgContainer = document.getElementById('messages');
+const chatInput    = document.getElementById('chat-input');
+const sendBtn      = document.getElementById('send-btn');
+const alSwitch     = document.getElementById('al-switch');
+const retrainBar   = document.getElementById('retrain-bar');
+
+function refreshCounters() {
+    document.getElementById('s-sent').textContent    = msgCount;
+    document.getElementById('s-taught').textContent  = taughtCount;
+    document.getElementById('s-learned').textContent = learnCount;
+}
+
+async function loadStats() {
+    try {
+        const r = await fetch(`${BACKEND}/stats`);
+        const d = await r.json();
+        document.getElementById('s-examples').textContent   = d.examples;
+        document.getElementById('hdr-examples').textContent = d.examples + ' EXAMPLES';
+    } catch {}
+}
+loadStats();
+
+document.getElementById('al-toggle').addEventListener('click', () => {
+    autoLearn = !autoLearn;
+    alSwitch.classList.toggle('on', autoLearn);
+});
+
+document.getElementById('retrain-btn').addEventListener('click', async () => {
+    document.getElementById('retrain-btn').textContent = 'TRAINING…';
+    try {
+        const r = await fetch(`${BACKEND}/retrain`, {method:'POST'});
+        const d = await r.json();
+        if (d.status === 'success') { pendingLearn = 0; retrainBar.classList.remove('show'); loadStats(); }
+    } catch {}
+    document.getElementById('retrain-btn').textContent = 'RETRAIN NOW';
+});
+
+function scrollBottom() { msgContainer.scrollTop = msgContainer.scrollHeight; }
+
+function userLabel() { return currentUser ? `// ${currentUser.given.toUpperCase()}` : '// YOU'; }
+
+function addMsg(role, text, confidence = null, exchange = null) {
+    const wrap = document.createElement('div');
+    wrap.className = `msg-wrap ${role}`;
+    if (role === 'ai' && confidence !== null && confidence < 0.25) wrap.classList.add('low');
+
+    const label = document.createElement('div');
+    label.className = 'msg-label';
+    label.textContent = role === 'user' ? userLabel() : '// NEURAL-AI';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = text;
+
+    wrap.appendChild(label);
+    wrap.appendChild(bubble);
+
+    if (role === 'ai' && confidence !== null) {
+        const pct   = Math.round(confidence * 100);
+        const color = confidence > 0.6 ? '#10b981' : confidence > 0.3 ? '#f59e0b' : '#ef4444';
+        const conf  = document.createElement('div');
+        conf.className = 'conf-row';
+        conf.innerHTML = `<div class="conf-track"><div class="conf-fill" style="width:${pct}%;background:${color}"></div></div><span>CONF: ${pct}%</span>`;
+        wrap.appendChild(conf);
+
+        if (exchange) {
+            const fbRow = document.createElement('div');
+            fbRow.className = 'fb-row';
+
+            const good = document.createElement('button');
+            good.className = 'fb-btn'; good.textContent = '👍 GOOD';
+            good.addEventListener('click', async () => {
+                await silentLearn(exchange.prompt, exchange.response);
+                good.textContent = '✓ SAVED'; good.classList.add('saved');
+                bad.style.display = 'none';
+                learnCount++; pendingLearn++;
+                refreshCounters();
+                retrainBar.classList.add('show');
+            });
+
+            const bad = document.createElement('button');
+            bad.className = 'fb-btn'; bad.textContent = '👎 WRONG';
+            bad.addEventListener('click', () => {
+                document.getElementById('t-prompt').value   = exchange.prompt;
+                document.getElementById('t-response').value = '';
+                document.getElementById('t-response').focus();
+                bad.textContent = '✎ CORRECTING…'; bad.classList.add('fixing');
+                good.style.display = 'none';
+            });
+
+            fbRow.appendChild(good); fbRow.appendChild(bad);
+            wrap.appendChild(fbRow);
+        }
+    }
+
+    msgContainer.appendChild(wrap);
+    scrollBottom();
+}
+
+function addTyping() {
+    const d = document.createElement('div');
+    d.className = 'typing'; d.id = 'typing';
+    d.innerHTML = '<div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div>';
+    msgContainer.appendChild(d);
+    scrollBottom();
+    return d;
+}
+
+async function silentLearn(prompt, response) {
+    try {
+        await fetch(`${BACKEND}/auto_learn`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({prompt, response})
+        });
+    } catch(e) { console.warn('auto_learn failed', e); }
+}
+
+async function sendMessage() {
+    const msg = chatInput.value.trim();
+    if (!msg) return;
+    chatInput.value = '';
+    sendBtn.disabled = true;
+    addMsg('user', msg);
+    msgCount++; refreshCounters();
+    const typing = addTyping();
+
+    try {
+        const r = await fetch(`${BACKEND}/chat`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                message: msg,
+                user_name: currentUser ? currentUser.given : null   // name sent to Flask
+            })
+        });
+        const d = await r.json();
+        typing.remove();
+        const conf     = d.confidence ?? null;
+        const exchange = {prompt: msg, response: d.reply};
+        addMsg('ai', d.reply, conf, exchange);
+        if (autoLearn && conf !== null && conf >= 0.25) {
+            await silentLearn(msg, d.reply);
+            learnCount++; pendingLearn++;
+            refreshCounters();
+            retrainBar.classList.add('show');
+        }
+    } catch {
+        typing.remove();
+        addMsg('ai', '⚠ Connection error — is the Flask server running?', 0);
+    }
+
+    sendBtn.disabled = false;
+    chatInput.focus();
+}
+
+sendBtn.addEventListener('click', sendMessage);
+chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+document.getElementById('teach-btn').addEventListener('click', async () => {
+    const prompt   = document.getElementById('t-prompt').value.trim();
+    const response = document.getElementById('t-response').value.trim();
+    const notice   = document.getElementById('teach-notice');
+    notice.className = 'notice';
+    if (!prompt || !response) { notice.className = 'notice er'; notice.textContent = 'Both fields are required.'; return; }
+    const btn = document.getElementById('teach-btn');
+    btn.disabled = true; btn.textContent = '⟳ TRAINING…';
+    try {
+        const r = await fetch(`${BACKEND}/import`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({prompt, response}) });
+        const d = await r.json();
+        notice.className = `notice ${d.status === 'success' ? 'ok' : 'er'}`;
+        notice.textContent = d.message;
+        if (d.status === 'success') { document.getElementById('t-prompt').value = ''; document.getElementById('t-response').value = ''; taughtCount++; refreshCounters(); loadStats(); }
+    } catch { notice.className = 'notice er'; notice.textContent = 'Server error.'; }
+    btn.disabled = false; btn.textContent = '⚡ TRAIN NEURAL NETWORK';
+});
+
+document.getElementById('json-import-btn').addEventListener('click', async () => {
+    const raw = document.getElementById('json-log').value.trim();
+    const notice = document.getElementById('json-notice');
+    notice.className = 'notice';
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { notice.className = 'notice er'; notice.textContent = 'Invalid JSON. Check your format.'; return; }
+    const btn = document.getElementById('json-import-btn');
+    btn.disabled = true; btn.textContent = '⟳ IMPORTING…';
+    try {
+        const r = await fetch(`${BACKEND}/import_log`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({log: parsed}) });
+        const d = await r.json();
+        notice.className = `notice ${d.status === 'success' ? 'ok' : 'er'}`;
+        notice.textContent = d.message;
+        if (d.status === 'success') { document.getElementById('json-log').value = ''; loadStats(); }
+    } catch { notice.className = 'notice er'; notice.textContent = 'Server error.'; }
+    btn.disabled = false; btn.textContent = '📂 IMPORT & RETRAIN';
+});
+
+document.getElementById('plain-import-btn').addEventListener('click', async () => {
+    const raw = document.getElementById('plain-log').value.trim();
+    const notice = document.getElementById('plain-notice');
+    notice.className = 'notice';
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const pairs = [];
+    for (let i = 0; i < lines.length - 1; i++) {
+        const uMatch = lines[i].match(/^(?:user|you|human):\s*(.+)/i);
+        const aMatch = lines[i+1].match(/^(?:ai|assistant|bot|neural):\s*(.+)/i);
+        if (uMatch && aMatch) { pairs.push({messages:[{role:'user',content:uMatch[1]},{role:'assistant',content:aMatch[1]}]}); i++; }
+    }
+    if (pairs.length === 0) { notice.className = 'notice er'; notice.textContent = 'No pairs found. Use "User: …" and "AI: …" on alternating lines.'; return; }
+    const btn = document.getElementById('plain-import-btn');
+    btn.disabled = true; btn.textContent = '⟳ PARSING…';
+    try {
+        const r = await fetch(`${BACKEND}/import_log`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({log: pairs}) });
+        const d = await r.json();
+        notice.className = `notice ${d.status === 'success' ? 'ok' : 'er'}`;
+        notice.textContent = `Parsed ${pairs.length} pairs. ${d.message}`;
+        if (d.status === 'success') { document.getElementById('plain-log').value = ''; loadStats(); }
+    } catch { notice.className = 'notice er'; notice.textContent = 'Server error.'; }
+    btn.disabled = false; btn.textContent = '📝 PARSE & RETRAIN';
+});
+</script>
+</body>
+</html>
